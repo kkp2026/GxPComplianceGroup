@@ -1709,6 +1709,8 @@ body[data-selected-template="template5"] .btn-primary { background-color: #38bdf
 body[data-selected-template="template5"] .btn-primary:hover { background-color: #7dd3fc; box-shadow: 0 10px 24px rgba(56, 189, 248, 0.4); }
 body[data-selected-template="template5"] .btn-secondary { background-color: transparent; color: #38bdf8; border-color: #38bdf8; }
 body[data-selected-template="template5"] .btn-secondary:hover { background-color: #38bdf8; color: #050a14; }
+body[data-selected-template="template5"] .btn-ghost { color: #ffffff; border-color: rgba(125, 211, 252, 0.45); }
+body[data-selected-template="template5"] .btn-ghost:hover { background-color: rgba(56, 189, 248, 0.12); border-color: #38bdf8; color: #7dd3fc; }
 
 body[data-selected-template="template5"] .careers-notice-box h3 { color: #ffffff; }
 body[data-selected-template="template5"] .careers-body-text { color: #94a3b8; }
@@ -1782,7 +1784,17 @@ body[data-selected-template="template5"] .dir-icon { color: #38bdf8; }
     .about-grid,
     .panel-layout-wrapper { grid-template-columns: 1fr !important; gap: 30px; }
     .reach-grid { grid-template-columns: 1fr; }
-    .contact-split-grid { grid-template-columns: 1fr !important; gap: 40px; }
+    .contact-split-grid {
+        grid-template-columns: 1fr !important;
+        gap: 40px;
+        justify-items: center;
+    }
+    .terminal-info-card,
+    .terminal-form-card {
+        width: 100%;
+        max-width: 580px;
+        min-width: 0;
+    }
     .footer-grid-wrap { flex-direction: column; text-align: center; gap: 30px; }
     .footer-left-alignment-cluster { flex-direction: column; gap: 18px; }
     .footer-coord-line { padding-left: 0; border-left: none; align-items: center; }
