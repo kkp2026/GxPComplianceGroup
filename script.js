@@ -1,5 +1,5 @@
 /* ==========================================================================
-   GxP COMPLIANCE GROUP — V2 RUNTIME
+   GxP COMPLIANCE GROUP — V2 RUNTIME WITH LIVE WEBHOOK PIPELINE
    Smooth transitions, scroll reveals, slideshow, counters, form validation
    ========================================================================== */
 
@@ -48,7 +48,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             e.preventDefault();
-            canvasWrapper.classList.add('canvas-fade-out');
+            if (canvasWrapper) canvasWrapper.classList.add('canvas-fade-out');
 
             setTimeout(() => {
                 viewTriggers.forEach(t => {
@@ -63,7 +63,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     view.classList.toggle('active', view.id === `view-${requestedView}`);
                 });
 
-                canvasWrapper.classList.remove('canvas-fade-out');
+                if (canvasWrapper) canvasWrapper.classList.remove('canvas-fade-out');
 
                 if (targetHref && targetHref.startsWith('#') && targetHref.length > 1) {
                     const target = document.querySelector(targetHref);
@@ -92,7 +92,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const targetPanel = document.getElementById(`panel-${targetScope}`);
             if (targetPanel) {
                 targetPanel.classList.add('active');
-                // Force image reflow to avoid blank panel image on first switch
                 const img = targetPanel.querySelector('.panel-context-img');
                 if (img) {
                     img.style.display = 'none';
@@ -130,7 +129,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const indicatorWrap = document.querySelector('.slideshow-indicators');
 
     if (slides.length > 0) {
-        // Build dots
         if (indicatorWrap) {
             slides.forEach((_, i) => {
                 const dot = document.createElement('span');
@@ -187,7 +185,6 @@ document.addEventListener('DOMContentLoaded', () => {
         function tick(now) {
             const elapsed = now - startTime;
             const progress = Math.min(elapsed / duration, 1);
-            // ease-out cubic
             const eased = 1 - Math.pow(1 - progress, 3);
             el.textContent = Math.round(target * eased);
             if (progress < 1) requestAnimationFrame(tick);
@@ -197,123 +194,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     /* ----------------------------------------------------------------------
-       7. Form Validation with Micro-Shake
+       7. Contact Form — embedded Microsoft Form
        ---------------------------------------------------------------------- */
-    const form = document.getElementById('interactiveInquiryForm');
-    const formCard = document.getElementById('formInteractionTarget');
-
-    if (form) {
-        form.addEventListener('submit', (event) => {
-            event.preventDefault();
-
-            // Reset prior error states
-            const allGroups = form.querySelectorAll('.input-field-group');
-            allGroups.forEach(group => {
-                group.classList.remove('field-state-error', 'element-shake-event');
-                const errNode = group.querySelector('.field-error-message');
-                if (errNode) errNode.textContent = '';
-            });
-            formCard.classList.remove('holistic-shake-event');
-
-            const fields = {
-                clientName: {
-                    el: document.getElementById('clientName'),
-                    val: document.getElementById('clientName').value.trim(),
-                    label: 'Full name'
-                },
-                clientEmail: {
-                    el: document.getElementById('clientEmail'),
-                    val: document.getElementById('clientEmail').value.trim(),
-                    label: 'Work email'
-                },
-                clientPhone: {
-                    el: document.getElementById('clientPhone'),
-                    val: document.getElementById('clientPhone').value.trim(),
-                    label: 'Contact number'
-                },
-                clientOrg: {
-                    el: document.getElementById('clientOrg'),
-                    val: document.getElementById('clientOrg').value.trim(),
-                    label: 'Organization'
-                },
-                clientMessage: {
-                    el: document.getElementById('clientMessage'),
-                    val: document.getElementById('clientMessage').value.trim(),
-                    label: 'Message'
-                },
-                caslConsentCheck: {
-                    el: document.getElementById('caslConsentCheck'),
-                    val: document.getElementById('caslConsentCheck').checked,
-                    label: 'CASL consent'
-                }
-            };
-
-            const missing = [];
-
-            if (!fields.clientName.val) missing.push('clientName');
-
-            if (!fields.clientEmail.val) {
-                missing.push('clientEmail');
-            } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(fields.clientEmail.val)) {
-                const group = form.querySelector('[data-validator-group="clientEmail"]');
-                group.classList.add('field-state-error', 'element-shake-event');
-                group.querySelector('.field-error-message').textContent = 'Please enter a valid email address.';
-            }
-
-            if (!fields.clientPhone.val) {
-                missing.push('clientPhone');
-            } else if (!/^[+\d][\d\s().\-]{6,}$/.test(fields.clientPhone.val)) {
-                const group = form.querySelector('[data-validator-group="clientPhone"]');
-                group.classList.add('field-state-error', 'element-shake-event');
-                group.querySelector('.field-error-message').textContent = 'Please enter a valid contact number.';
-            }
-
-            if (!fields.clientOrg.val) missing.push('clientOrg');
-            if (!fields.clientMessage.val) missing.push('clientMessage');
-            if (!fields.caslConsentCheck.val) missing.push('caslConsentCheck');
-
-            // Entire form empty → whole-card shake
-            if (missing.length === Object.keys(fields).length) {
-                void formCard.offsetWidth;
-                formCard.classList.add('holistic-shake-event');
-                missing.forEach(key => {
-                    const group = form.querySelector(`[data-validator-group="${key}"]`);
-                    group.classList.add('field-state-error');
-                    group.querySelector('.field-error-message').textContent = `${fields[key].label} is required.`;
-                });
-                return;
-            }
-
-            // Some missing → per-field shake
-            if (missing.length > 0) {
-                missing.forEach(key => {
-                    const group = form.querySelector(`[data-validator-group="${key}"]`);
-                    void group.offsetWidth;
-                    group.classList.add('field-state-error', 'element-shake-event');
-                    group.querySelector('.field-error-message').textContent = `${fields[key].label} cannot be empty.`;
-                });
-                return;
-            }
-
-            if (form.querySelectorAll('.field-state-error').length > 0) return;
-
-            // Success state
-            const submitBtn = form.querySelector('button[type="submit"]');
-            submitBtn.innerHTML = '<span class="btn-label">Submitting…</span>';
-            submitBtn.disabled = true;
-
-            setTimeout(() => {
-                formCard.innerHTML = `
-                    <div class="submission-success-card">
-                        <div class="success-icon-badge">✓</div>
-                        <h3>Engagement Request Received</h3>
-                        <p class="success-p1">Thank you. Your inquiry has been routed to our coordination desk.</p>
-                        <p class="success-p2">A senior practitioner will reach out shortly regarding your inspection timeline or pipeline milestones.</p>
-                    </div>
-                `;
-            }, 700);
-        });
-    }
+    // The contact card now embeds a Microsoft Form iframe directly
+    // (see index.html #interactiveInquiryForm). Microsoft Forms handles all
+    // input validation, data capture, and storage natively, so no client-side
+    // submit listener, field validation, or payload logic is needed here.
 
     /* ----------------------------------------------------------------------
        8. Subtle Parallax on Hero Orbit (mouse-follow tilt)
@@ -345,5 +231,46 @@ document.addEventListener('DOMContentLoaded', () => {
         };
         window.addEventListener('scroll', onScroll, { passive: true });
         onScroll();
+    }
+
+    /* ----------------------------------------------------------------------
+       10. Mobile Navigation (hamburger + Services accordion)
+       ---------------------------------------------------------------------- */
+    const navToggle = document.getElementById('navToggle');
+    const primaryNav = document.getElementById('primaryNav');
+    const mobileQuery = window.matchMedia('(max-width: 768px)');
+
+    if (navToggle && header && primaryNav) {
+        const setMenu = (open) => {
+            header.classList.toggle('nav-open', open);
+            navToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+            navToggle.setAttribute('aria-label', open ? 'Close menu' : 'Open menu');
+            if (!open) {
+                document.querySelectorAll('.nav-has-dropdown.submenu-open')
+                    .forEach(el => el.classList.remove('submenu-open'));
+            }
+        };
+
+        navToggle.addEventListener('click', () => setMenu(!header.classList.contains('nav-open')));
+
+        const dropToggle = primaryNav.querySelector('.nav-dropdown-toggle');
+        if (dropToggle) {
+            dropToggle.addEventListener('click', (e) => {
+                if (mobileQuery.matches) {
+                    e.preventDefault();
+                    const parent = dropToggle.closest('.nav-has-dropdown');
+                    if (parent) parent.classList.toggle('submenu-open');
+                }
+            });
+        }
+
+        primaryNav.querySelectorAll('a').forEach(link => {
+            link.addEventListener('click', () => {
+                if (link === dropToggle && mobileQuery.matches) return;
+                if (mobileQuery.matches) setMenu(false);
+            });
+        });
+
+        mobileQuery.addEventListener('change', (e) => { if (!e.matches) setMenu(false); });
     }
 });
