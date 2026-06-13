@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex, nofollow">
+    <title>User Management — GxP Compliance Group</title>
+    <link rel="icon" type="image/png" href="GxPIcon.png">
+    <link rel="apple-touch-icon" href="GxPIcon.png">
+    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Lora:ital,wght@0,500;0,600;1,400&family=Space+Grotesk:wght@400;500;600;700&family=Fira+Code:wght@400;500&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
+    <style>
+        .site-header { top: 0; }
+    </style>
+</head>
+<body>
+
+    <main class="matrix-section" style="min-height:80vh; padding:120px 0;">
+        <div class="container">
+            <div class="section-center-header" style="text-align:left; display:flex; justify-content:space-between; align-items:flex-end;">
+                <div>
+                    <span class="section-sublabel">Admin Control</span>
+                    <h2 style="margin-bottom:0;">User Management</h2>
+                    <p class="refined-subtext">Manage team access and permissions.</p>
+                </div>
+                <button id="backBtn" class="btn btn-secondary" style="padding:8px 16px; font-size:12px;">Back to Dashboard</button>
+            </div>
+
+            <div class="contact-split-grid" style="margin-top:40px;">
+                <div class="terminal-form-card">
+                    <h3 style="font-family: var(--font-serif); margin-bottom:24px;">Add New User</h3>
+                    <form id="addUserForm">
+                        <div class="input-field-group">
+                            <label for="new-username">Username</label>
+                            <input type="text" id="new-username" required>
+                        </div>
+                        <div class="input-field-group">
+                            <label for="new-password">Password</label>
+                            <input type="password" id="new-password" required>
+                        </div>
+                        <div class="input-field-group">
+                            <label for="new-role">Role</label>
+                            <select id="new-role" class="select-styled">
+                                <option value="user">User</option>
+                                <option value="admin">Admin</option>
+                            </select>
+                        </div>
+                        <button type="submit" class="btn btn-primary btn-block">Create Account</button>
+                    </form>
+                </div>
+
+                <div class="terminal-form-card" style="padding:0; overflow-x:auto;">
+                    <table style="width:100%; border-collapse:collapse; font-size:14px;">
+                        <thead style="background-color: var(--canvas-bg); border-bottom:1px solid var(--line-soft);">
+                            <tr>
+                                <th style="padding:16px; text-align:left;">Username</th>
+                                <th style="padding:16px; text-align:left;">Role</th>
+                                <th style="padding:16px; text-align:right;">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="userTableBody">
+                            <tr><td colspan="3" style="padding:40px; text-align:center;">Loading...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <p class="field-error-message" id="adminError" style="margin-top:20px; display:none;"></p>
+        </div>
+    </main>
+
+    <script>
+        const API_URL = 'api';
+        const token = localStorage.getItem('gxp_token');
+        const currentUser = JSON.parse(localStorage.getItem('gxp_user') || '{}');
+
+        if (!token || currentUser.role !== 'admin') {
+            window.location.replace('dashboard.html');
+        }
+
+        document.getElementById('backBtn').addEventListener('click', () => window.location.href = 'dashboard.html');
+
+        let users = [];
+
+        function showError(msg) {
+            const el = document.getElementById('adminError');
+            el.textContent = msg;
+            el.style.display = msg ? 'block' : 'none';
+        }
+
+        async function fetchUsers() {
+            try {
+                const res = await fetch(`${API_URL}/users.php`, {
+                    headers: { 'Authorization': `Bearer ${token}` },
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error || 'Failed to fetch users.');
+                users = data.users;
+                render();
+            } catch (err) {
+                showError(err.message);
+            }
+        }
+
+        document.getElementById('addUserForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            showError('');
+            try {
+                const res = await fetch(`${API_URL}/users.php`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`,
+                    },
+                    body: JSON.stringify({
+                        username: document.getElementById('new-username').value,
+                        password: document.getElementById('new-password').value,
+                        role: document.getElementById('new-role').value,
+                    }),
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error || 'Failed to add user.');
+                users.push(data.user);
+                document.getElementById('addUserForm').reset();
+                render();
+            } catch (err) {
+                showError(err.message);
+            }
+        });
+
+        async function updateUser(uid, updates) {
+            try {
+                const res = await fetch(`${API_URL}/user.php?uid=${uid}`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`,
+                    },
+                    body: JSON.stringify(updates),
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error || 'Update failed.');
+                users = users.map(u => u.uid === uid ? data.user : u);
+                render();
+            } catch (err) {
+                alert(err.message);
+            }
+        }
+
+        async function deleteUser(uid) {
+            if (!confirm('Are you sure you want to remove this user?')) return;
+            try {
+                const res = await fetch(`${API_URL}/user.php?uid=${uid}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${token}` },
+                });
+                if (!res.ok) {
+                    const data = await res.json();
+                    throw new Error(data.error || 'Failed to delete user.');
+                }
+                users = users.filter(u => u.uid !== uid);
+                render();
+            } catch (err) {
+                showError(err.message);
+            }
+        }
+
+        function escapeHtml(str) {
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;');
+        }
+
+        function render() {
+            const tbody = document.getElementById('userTableBody');
+            tbody.innerHTML = users.map(u => `
+                <tr style="border-bottom:1px solid var(--line-soft);">
+                    <td style="padding:16px;"><strong>${escapeHtml(u.username)}</strong></td>
+                    <td style="padding:16px;">
+                        <select class="select-styled role-select" data-uid="${u.uid}" style="padding:4px 24px 4px 8px; font-size:12px; width:100px;" ${u.username === 'admin' ? 'disabled' : ''}>
+                            <option value="user" ${u.role === 'user' ? 'selected' : ''}>User</option>
+                            <option value="admin" ${u.role === 'admin' ? 'selected' : ''}>Admin</option>
+                        </select>
+                    </td>
+                    <td style="padding:16px; text-align:right;">
+                        <button class="reset-pass" data-uid="${u.uid}" data-username="${escapeHtml(u.username)}" style="color: var(--accent-blue); background:none; border:none; cursor:pointer; margin-right:10px; font-size:12px;">Reset Pass</button>
+                        ${u.username !== 'admin' ? `<button class="remove-user" data-uid="${u.uid}" style="color: var(--error-red); background:none; border:none; cursor:pointer; font-size:12px;">Remove</button>` : ''}
+                    </td>
+                </tr>
+            `).join('');
+
+            tbody.querySelectorAll('.role-select').forEach(sel => {
+                sel.addEventListener('change', () => updateUser(parseInt(sel.dataset.uid), { role: sel.value }));
+            });
+            tbody.querySelectorAll('.reset-pass').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const newPass = prompt(`Enter new password for ${btn.dataset.username}:`);
+                    if (newPass) updateUser(parseInt(btn.dataset.uid), { password: newPass });
+                });
+            });
+            tbody.querySelectorAll('.remove-user').forEach(btn => {
+                btn.addEventListener('click', () => deleteUser(parseInt(btn.dataset.uid)));
+            });
+        }
+
+        fetchUsers();
+    </script>
+</body>
+</html>

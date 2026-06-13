@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex, nofollow">
+    <title>Business Portal Login — GxP Compliance Group</title>
+    <link rel="icon" type="image/png" href="GxPIcon.png">
+    <link rel="apple-touch-icon" href="GxPIcon.png">
+    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Lora:ital,wght@0,400;0,500;0,600;1,400&family=Space+Grotesk:wght@400;500;600;700&family=Fira+Code:wght@400;500&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
+    <style>
+        .site-header { top: 0; }
+    </style>
+</head>
+<body>
+
+    <main class="careers-standalone-hero">
+        <div class="container" style="max-width:440px;">
+            <div class="terminal-form-card reveal-on-scroll is-visible">
+                <div style="text-align:center; margin-bottom:24px;">
+                    <span class="section-sublabel">Business Portal</span>
+                    <h2 style="font-family: var(--font-serif); margin-top:8px;">Login</h2>
+                </div>
+
+                <form id="loginForm" novalidate>
+                    <div class="input-field-group">
+                        <label for="login-user">Username</label>
+                        <input type="text" id="login-user" name="username" autocomplete="username">
+                    </div>
+                    <div class="input-field-group">
+                        <label for="login-pass">Password</label>
+                        <input type="password" id="login-pass" name="password" autocomplete="current-password">
+                    </div>
+
+                    <p class="field-error-message" id="loginError" style="display:none; margin-bottom:16px;"></p>
+
+                    <button type="submit" class="btn btn-primary btn-block" id="loginSubmit">Sign In</button>
+                </form>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        const API_URL = 'api';
+
+        // If already logged in, redirect
+        if (localStorage.getItem('gxp_token')) {
+            window.location.replace('dashboard.html');
+        }
+
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const errorEl = document.getElementById('loginError');
+            const btn = document.getElementById('loginSubmit');
+            errorEl.style.display = 'none';
+            btn.disabled = true;
+            btn.textContent = 'Authenticating...';
+
+            try {
+                const res = await fetch(`${API_URL}/login.php`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        username: document.getElementById('login-user').value,
+                        password: document.getElementById('login-pass').value,
+                    }),
+                });
+                const data = await res.json();
+                if (!res.ok || !data.ok) throw new Error(data.error || 'Login failed.');
+
+                localStorage.setItem('gxp_token', data.token);
+                localStorage.setItem('gxp_user', JSON.stringify(data.user));
+                window.location.replace('dashboard.html');
+            } catch (err) {
+                errorEl.textContent = err.message;
+                errorEl.style.display = 'block';
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Sign In';
+            }
+        });
+    </script>
+</body>
+</html>

@@ -6,29 +6,7 @@
 document.addEventListener('DOMContentLoaded', () => {
 
     /* ----------------------------------------------------------------------
-       1. Template Switcher
-       ---------------------------------------------------------------------- */
-    const sandboxButtons = document.querySelectorAll('.sandbox-btn');
-
-    sandboxButtons.forEach(btn => {
-        btn.addEventListener('click', () => {
-            const selectedTemplate = btn.getAttribute('data-set-template');
-            sandboxButtons.forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
-            document.body.setAttribute('data-selected-template', selectedTemplate);
-
-            // Re-trigger reveals after template flip so visible blocks animate nicely
-            document.querySelectorAll('.reveal-on-scroll, .reveal-fade-up').forEach(el => {
-                const rect = el.getBoundingClientRect();
-                if (rect.top < window.innerHeight && rect.bottom > 0) {
-                    el.classList.add('is-visible');
-                }
-            });
-        });
-    });
-
-    /* ----------------------------------------------------------------------
-       2. View Router with Fade Transition
+       1. View Router with Fade Transition
        ---------------------------------------------------------------------- */
     const viewTriggers = document.querySelectorAll('.frame-view-trigger');
     const pageViews = document.querySelectorAll('.page-view');
@@ -39,11 +17,10 @@ document.addEventListener('DOMContentLoaded', () => {
             const requestedView = trigger.getAttribute('data-target-view');
             const targetHref = trigger.getAttribute('href');
 
-            // Hash links inside the active home view → just smooth-scroll
             if (targetHref && targetHref.startsWith('#') && requestedView === 'home') {
                 const currentView = document.querySelector('.page-view.active');
                 if (currentView && currentView.id === 'view-home') {
-                    return; // browser will handle the hash scroll
+                    return;
                 }
             }
 
@@ -89,6 +66,15 @@ document.addEventListener('DOMContentLoaded', () => {
             matrixPanels.forEach(p => p.classList.remove('active'));
 
             tabBtn.classList.add('active');
+
+            const bar = document.getElementById('serviceTabBar');
+            if (bar) {
+                const barW = bar.clientWidth;
+                const btnOffset = tabBtn.offsetLeft;
+                const btnW = tabBtn.offsetWidth;
+                bar.scrollTo({ left: btnOffset - (barW / 2) + (btnW / 2), behavior: 'smooth' });
+            }
+
             const targetPanel = document.getElementById(`panel-${targetScope}`);
             if (targetPanel) {
                 targetPanel.classList.add('active');
@@ -194,12 +180,159 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     /* ----------------------------------------------------------------------
-       7. Contact Form — embedded Microsoft Form
+       7. Contact Form — custom inquiry form → PHP API → MySQL
        ---------------------------------------------------------------------- */
-    // The contact card now embeds a Microsoft Form iframe directly
-    // (see index.html #interactiveInquiryForm). Microsoft Forms handles all
-    // input validation, data capture, and storage natively, so no client-side
-    // submit listener, field validation, or payload logic is needed here.
+    const INQUIRY_ENDPOINT = 'api/inquiries.php';
+
+    const inquiryForm = document.getElementById('inquiryForm');
+    const inquirySuccess = document.getElementById('inquirySuccess');
+
+    if (inquiryForm) {
+
+        const setError = (id, msg) => {
+            const el = inquiryForm.querySelector(`[data-error-for="${id}"]`);
+            const field = document.getElementById(id);
+            if (el) el.textContent = msg || '';
+            if (field) {
+                const group = field.closest('.input-field-group, .compliance-casl-card');
+                if (group) group.classList.toggle('field-state-error', !!msg);
+            }
+        };
+
+        // Strip to 10 national digits, drop leading country code 1
+        const phoneDigits = (v) => {
+            let d = (v || '').replace(/\D/g, '');
+            if (d.charAt(0) === '1') d = d.slice(1);
+            return d.slice(0, 10);
+        };
+
+        const validators = {
+            'if-name':    v => v.trim() ? '' : 'Please enter your full name.',
+            'if-email':   v => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim()) ? '' : 'Please enter a valid email address.',
+            'if-phone':   v => phoneDigits(v).length === 10 ? '' : 'Enter a valid number, e.g. +1 (123) 456-7890.',
+            'if-org':     v => v.trim() ? '' : 'Please enter your organization.',
+            'if-topic':   v => v ? '' : 'Please select an area of interest.',
+            'if-message': v => v.trim() ? '' : 'Please tell us how we can help.',
+        };
+
+        // Live +1 mask as user types
+        const phoneEl = document.getElementById('if-phone');
+        if (phoneEl) {
+            phoneEl.addEventListener('input', () => {
+                const d = phoneDigits(phoneEl.value).slice(0, 10);
+                if (!d) { phoneEl.value = ''; return; }
+                let out = '+1 (' + d.slice(0, 3);
+                if (d.length >= 3) out += ')';
+                if (d.length > 3) out += ' ' + d.slice(3, 6);
+                if (d.length > 6) out += '-' + d.slice(6, 10);
+                phoneEl.value = out;
+            });
+        }
+
+        const validateAll = () => {
+            let ok = true;
+            Object.entries(validators).forEach(([id, fn]) => {
+                const el = document.getElementById(id);
+                const msg = fn(el ? el.value : '');
+                setError(id, msg);
+                if (msg) ok = false;
+            });
+            const consent = document.getElementById('if-consent');
+            if (consent && !consent.checked) {
+                setError('if-consent', 'Please provide consent to continue.');
+                ok = false;
+            } else {
+                setError('if-consent', '');
+            }
+            return ok;
+        };
+
+        // Clear error on correction
+        inquiryForm.querySelectorAll('input, textarea, select').forEach(el => {
+            el.addEventListener('input', () => setError(el.id, ''));
+        });
+
+        inquiryForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+
+            // Honeypot — silently drop bots
+            const hp = document.getElementById('if-company-website');
+            if (hp && hp.value.trim() !== '') return;
+
+            if (!validateAll()) {
+                const firstErr = inquiryForm.querySelector('.field-state-error');
+                if (firstErr) {
+                    firstErr.classList.add('element-shake-event');
+                    setTimeout(() => firstErr.classList.remove('element-shake-event'), 500);
+                    const input = firstErr.querySelector('input, textarea, select');
+                    if (input) input.focus();
+                }
+                return;
+            }
+
+            const submitBtn = document.getElementById('inquirySubmit');
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Sending…';
+
+            const resetBtn = () => {
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Submit Inquiry';
+            };
+
+            const finishSuccess = () => {
+                inquiryForm.hidden = true;
+                if (inquirySuccess) {
+                    inquirySuccess.hidden = false;
+                    inquirySuccess.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+            };
+
+            const sendInquiry = () => {
+                const phone10 = phoneDigits(document.getElementById('if-phone')?.value || '');
+                const formattedPhone = phone10.length === 10
+                    ? `${phone10.slice(0,3)}-${phone10.slice(3,6)}-${phone10.slice(6)}`
+                    : phone10;
+
+                const payload = {
+                    fullName: (document.getElementById('if-name')?.value || '').trim(),
+                    email: (document.getElementById('if-email')?.value || '').trim(),
+                    contactNumber: formattedPhone,
+                    organization: (document.getElementById('if-org')?.value || '').trim(),
+                    areaOfInterest: (document.getElementById('if-topic')?.value || '').trim(),
+                    message: (document.getElementById('if-message')?.value || '').trim(),
+                    website: (document.getElementById('if-company-website')?.value || '').trim(),
+                };
+
+                fetch(INQUIRY_ENDPOINT, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                })
+                    .then(res => res.json().then(data => ({ ok: res.ok, data })))
+                    .then(({ ok, data }) => {
+                        if (!ok || !data.ok) {
+                            if (data.errors) {
+                                Object.entries(data.errors).forEach(([key, msg]) => {
+                                    const idMap = { fullName: 'if-name', email: 'if-email', phone: 'if-phone', org: 'if-org', topic: 'if-topic', message: 'if-message' };
+                                    setError(idMap[key] || key, msg);
+                                });
+                            }
+                            resetBtn();
+                            return;
+                        }
+                        const ref = inquirySuccess?.querySelector('[data-custid]');
+                        if (ref) ref.textContent = data.custid;
+                        finishSuccess();
+                    })
+                    .catch(() => {
+                        resetBtn();
+                        alert('Something went wrong. Please try again later.');
+                    });
+            };
+
+            sendInquiry();
+        });
+    }
 
     /* ----------------------------------------------------------------------
        8. Subtle Parallax on Hero Orbit (mouse-follow tilt)

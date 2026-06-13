@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex, nofollow">
+    <title>Inquiry Dashboard — GxP Compliance Group</title>
+    <link rel="icon" type="image/png" href="GxPIcon.png">
+    <link rel="apple-touch-icon" href="GxPIcon.png">
+    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Lora:ital,wght@0,400;0,500;0,600;1,400&family=Space+Grotesk:wght@400;500;600;700&family=Fira+Code:wght@400;500&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
+    <style>
+        .site-header { top: 0; }
+        td, th { padding: 16px; }
+    </style>
+</head>
+<body>
+
+    <main class="matrix-section" style="min-height:80vh; padding:120px 0;">
+        <div class="container" style="max-width:1600px;">
+            <div class="section-center-header" style="text-align:left; display:flex; justify-content:space-between; align-items:flex-end;">
+                <div>
+                    <span class="section-sublabel">Business Inquiries</span>
+                    <h2 style="margin-bottom:0;">Inquiry Dashboard</h2>
+                    <p class="refined-subtext">Welcome back, <strong id="welcomeUser"></strong>.</p>
+                </div>
+                <div style="display:flex; gap:10px;">
+                    <button id="adminLink" class="btn btn-secondary" style="padding:8px 16px; font-size:12px; display:none;">Manage Users</button>
+                    <button id="logoutBtn" class="btn btn-secondary" style="padding:8px 16px; font-size:12px;">Logout</button>
+                </div>
+            </div>
+
+            <div class="tab-control-bar" style="margin:40px 0 24px;">
+                <button class="tab-trigger active" data-tab="general" style="flex:0 0 160px; min-height:60px; padding:10px;">
+                    <span class="tab-name">General Queue</span>
+                </button>
+                <button class="tab-trigger" data-tab="on hold" style="flex:0 0 160px; min-height:60px; padding:10px;">
+                    <span class="tab-name">On Hold</span>
+                </button>
+                <button class="tab-trigger" data-tab="closed" style="flex:0 0 160px; min-height:60px; padding:10px;">
+                    <span class="tab-name">Closed / Archive</span>
+                </button>
+            </div>
+
+            <div style="display:flex; justify-content:flex-end; margin-bottom:10px;">
+                <p style="font-size:12px; color: var(--error-red); font-weight:600; display:flex; align-items:center; gap:6px;">
+                    <span style="font-size:14px;">⚠</span> Note: All closures can be performed only by administrators.
+                </p>
+            </div>
+
+            <p class="field-error-message" id="dashError" style="display:none;"></p>
+
+            <div class="terminal-form-card" style="padding:0; overflow-x:auto;">
+                <table style="width:100%; border-collapse:collapse; font-size:13px; text-align:left;">
+                    <thead style="background-color: var(--canvas-bg); border-bottom:2px solid var(--line-soft);">
+                        <tr>
+                            <th>CustID</th>
+                            <th>Date (PT)</th>
+                            <th>Client</th>
+                            <th>Contact</th>
+                            <th>Organization</th>
+                            <th>Interest</th>
+                            <th style="min-width:200px;">Client Message</th>
+                            <th style="min-width:150px;">Status</th>
+                            <th style="min-width:250px;">Internal Notes</th>
+                        </tr>
+                    </thead>
+                    <tbody id="inquiryTableBody">
+                        <tr><td colspan="9" style="padding:40px; text-align:center;">Loading...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        const API_URL = 'api';
+        const token = localStorage.getItem('gxp_token');
+        const user = JSON.parse(localStorage.getItem('gxp_user') || '{}');
+
+        if (!token) window.location.replace('login.html');
+
+        document.getElementById('welcomeUser').textContent = user.username || '';
+        if (user.role === 'admin') {
+            const adminBtn = document.getElementById('adminLink');
+            adminBtn.style.display = 'inline-block';
+            adminBtn.addEventListener('click', () => window.location.href = 'admin.html');
+        }
+
+        document.getElementById('logoutBtn').addEventListener('click', () => {
+            localStorage.clear();
+            window.location.replace('login.html');
+        });
+
+        let inquiries = [];
+        let activeTab = 'general';
+
+        const formatDate = (dateStr) => {
+            if (!dateStr) return 'N/A';
+            return new Intl.DateTimeFormat('en-US', {
+                timeZone: 'America/Los_Angeles',
+                month: 'short', day: 'numeric', year: 'numeric',
+                hour: '2-digit', minute: '2-digit'
+            }).format(new Date(dateStr));
+        };
+
+        async function fetchInquiries() {
+            try {
+                const res = await fetch(`${API_URL}/dashboard_inquiries.php`, {
+                    headers: { 'Authorization': `Bearer ${token}` },
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error || 'Failed to fetch data.');
+                inquiries = data.inquiries;
+                render();
+            } catch (err) {
+                const errEl = document.getElementById('dashError');
+                errEl.textContent = err.message;
+                errEl.style.display = 'block';
+                if (err.message.toLowerCase().includes('token')) {
+                    localStorage.clear();
+                    window.location.replace('login.html');
+                }
+            }
+        }
+
+        async function updateInquiry(custid, updates) {
+            if (updates.status === 'Closed' && user.role !== 'admin') {
+                alert('Only administrators can close inquiries.');
+                return;
+            }
+            try {
+                const res = await fetch(`${API_URL}/dashboard_update.php?custid=${custid}`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`,
+                    },
+                    body: JSON.stringify(updates),
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error || 'Update failed.');
+                inquiries = inquiries.map(item => item.custid === custid ? { ...item, ...updates } : item);
+                render();
+            } catch (err) {
+                alert(err.message);
+            }
+        }
+
+        function render() {
+            const tbody = document.getElementById('inquiryTableBody');
+            const filtered = inquiries.filter(item => {
+                if (activeTab === 'closed') return item.status === 'Closed';
+                if (activeTab === 'on hold') return item.status === 'on hold';
+                return !['on hold', 'Closed'].includes(item.status);
+            });
+
+            if (filtered.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="9" style="padding:40px; text-align:center; color: var(--slate-light);">No inquiries found in this view.</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = filtered.map(item => `
+                <tr style="border-bottom:1px solid var(--line-soft);">
+                    <td><strong>${item.custid}</strong></td>
+                    <td>${formatDate(item.created_at)}</td>
+                    <td>
+                        <div style="font-weight:600;">${escapeHtml(item.full_name)}</div>
+                        <div style="font-size:11px; color: var(--slate-light);">${escapeHtml(item.email)}</div>
+                    </td>
+                    <td>${escapeHtml(item.contact_number)}</td>
+                    <td>${escapeHtml(item.organization)}</td>
+                    <td>${escapeHtml(item.area_of_interest)}</td>
+                    <td>
+                        <div style="max-height:100px; overflow-y:auto; font-size:12px; color: var(--slate-text); white-space:pre-wrap;">${escapeHtml(item.message)}</div>
+                    </td>
+                    <td>
+                        <select class="select-styled status-select" data-custid="${item.custid}" style="padding:4px 24px 4px 8px; font-size:12px; width:100%; max-width:150px;">
+                            <option value="new" ${item.status === 'new' ? 'selected' : ''}>New</option>
+                            <option value="in process/talks" ${item.status === 'in process/talks' ? 'selected' : ''}>In Process/Talks</option>
+                            <option value="contacted" ${item.status === 'contacted' ? 'selected' : ''}>Contacted</option>
+                            <option value="on hold" ${item.status === 'on hold' ? 'selected' : ''}>On Hold</option>
+                            <option value="Closed" ${item.status === 'Closed' ? 'selected' : ''} ${user.role !== 'admin' ? 'disabled' : ''}>Closed</option>
+                        </select>
+                    </td>
+                    <td class="notes-cell" data-custid="${item.custid}">
+                        <div class="notes-display" style="cursor:pointer; min-height:20px; font-style:${item.internal_notes ? 'normal' : 'italic'}; color:${item.internal_notes ? 'inherit' : 'var(--slate-light)'};">${escapeHtml(item.internal_notes || 'Add note...')}</div>
+                    </td>
+                </tr>
+            `).join('');
+
+            tbody.querySelectorAll('.status-select').forEach(sel => {
+                sel.addEventListener('change', () => {
+                    updateInquiry(parseInt(sel.dataset.custid), { status: sel.value });
+                });
+            });
+
+            tbody.querySelectorAll('.notes-cell').forEach(cell => {
+                cell.addEventListener('click', function handler() {
+                    const custid = parseInt(cell.dataset.custid);
+                    const current = inquiries.find(i => i.custid === custid);
+                    const existing = current.internal_notes || '';
+
+                    cell.innerHTML = `
+                        <div style="display:flex; gap:8px;">
+                            <input type="text" value="${escapeHtml(existing)}" style="flex:1; padding:4px 8px; font-size:12px; border:1px solid var(--accent-blue); border-radius:4px;">
+                            <button class="note-save" style="color: var(--success-green); background:none; border:none; cursor:pointer; font-weight:700;">✓</button>
+                            <button class="note-cancel" style="color: var(--error-red); background:none; border:none; cursor:pointer; font-weight:700;">✕</button>
+                        </div>
+                    `;
+                    const input = cell.querySelector('input');
+                    input.focus();
+
+                    cell.querySelector('.note-save').addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        updateInquiry(custid, { internal_notes: input.value });
+                    });
+                    cell.querySelector('.note-cancel').addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        render();
+                    });
+                });
+            });
+        }
+
+        function escapeHtml(str) {
+            if (str === null || str === undefined) return '';
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;');
+        }
+
+        document.querySelectorAll('.tab-trigger').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.tab-trigger').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                activeTab = btn.dataset.tab;
+                render();
+            });
+        });
+
+        fetchInquiries();
+    </script>
+</body>
+</html>
